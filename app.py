@@ -389,9 +389,9 @@ def tx_rate_st(dfpt, df_first=df_first, n=30):
         "治療人数": int(ntx),
         "誤差スコア": float(d),
         "治療期間_mean": visits["治療期間_mean"] if visits else None,
-        "治療期間_var": visits["治療期間_var"] if visits else None,
+        "治療期間_std": visits["治療期間_std"] if visits else None,
         "通院回数_mean": visits["通院回数_mean"] if visits else None,
-        "通院回数_var": visits["通院回数_var"] if visits else None,
+        "通院回数_std": visits["通院回数_std"] if visits else None,
     }
 
 
@@ -447,9 +447,9 @@ def similar_pts_st(dfpt, min=5, remove_self=False):
         "最適人数N": int(N),
         "誤差スコア": float(d),
         "治療期間_mean": visits["治療期間_mean"] if visits else None,
-        "治療期間_var": visits["治療期間_var"] if visits else None,
+        "治療期間_std": visits["治療期間_std"] if visits else None,
         "通院回数_mean": visits["通院回数_mean"] if visits else None,
-        "通院回数_var": visits["通院回数_var"] if visits else None,
+        "通院回数_std": visits["通院回数_std"] if visits else None,
         "members": list(members),
     }
 
@@ -473,7 +473,6 @@ def co_plot_fig(dfpt):
         dfco_pre_global['w_delta'] += dfpt_w[p].iloc[0] * abs(df_first['z_'+p] - dfpt_z[p].iloc[0])**2
 
     rank = list(dfco_pre_global.sort_values('w_delta')['ダミーID'])[:10]
-
     dfcon = df_co[df_co['ダミーID'].isin(rank)]
 
     para_table = [
@@ -483,10 +482,7 @@ def co_plot_fig(dfpt):
         ['前後径','左右径']
     ]
 
-    fig = make_subplots(
-        rows=4, cols=2,
-        subplot_titles=sum(para_table, [])
-    )
+    fig = make_subplots(rows=4, cols=2, subplot_titles=sum(para_table, []))
 
     # お子様
     for i in range(4):
@@ -497,7 +493,8 @@ def co_plot_fig(dfpt):
                     y=dfpt[para_table[i][j]],
                     name='お子様',
                     marker=dict(color='green', size=10),
-                    mode='markers+lines'
+                    mode='markers+lines',
+                    showlegend=False,   # ★追加
                 ),
                 row=i+1, col=j+1
             )
@@ -514,30 +511,30 @@ def co_plot_fig(dfpt):
                         y=tmp[para_table[i][j]],
                         name=pid,
                         marker=dict(color=colors[c % len(colors)]),
-                        mode='lines+markers'
+                        mode='lines+markers',
+                        showlegend=False,  # ★追加
                     ),
                     row=i+1, col=j+1
                 )
         c += 1
 
-    fig.update_layout(height=900, width=1200)
+    fig.update_layout(
+        height=900, width=1200,
+        showlegend=False,  # ★追加（念のため）
+    )
     return fig
 
 def _visits_summary(df_tx_pre_post: pd.DataFrame, members):
-    """members(ダミーID一覧) から 治療期間/通院回数 を患者単位で集計して mean/var を返す"""
+    """members(ダミーID一覧) から 治療期間/通院回数 を患者単位で集計して mean/std を返す"""
     if len(members) == 0:
         return None
 
     tmp = df_tx_pre_post[df_tx_pre_post["ダミーID"].isin(members)].copy()
-    if tmp.empty:
+    if tmp.empty or "治療期間" not in tmp.columns:
         return None
 
-    # 治療期間が無い/NaN対策
-    if "治療期間" not in tmp.columns:
-        return None
     tmp["治療期間"] = pd.to_numeric(tmp["治療期間"], errors="coerce")
 
-    # 患者ごとに最大治療期間、通院回数（ユニーク治療期間の数-1）を計算
     g = (
         tmp.groupby("ダミーID", as_index=False)
            .agg(
@@ -546,12 +543,14 @@ def _visits_summary(df_tx_pre_post: pd.DataFrame, members):
            )
     )
 
-    # 分散は pandas var()（不偏分散, ddof=1）なので、母分散が欲しければ ddof=0 にする
+    # 表示用の通院回数は +1
+    visits_count = g["通院回数"] + 1
+
     res = {
         "治療期間_mean": float(g["治療期間"].mean()),
-        "治療期間_var": float(g["治療期間"].var(ddof=1)) if len(g) >= 2 else 0.0,
-        "通院回数_mean": float((g["通院回数"] + 1).mean()),  # 表示は「回数」なので +1
-        "通院回数_var": float((g["通院回数"] + 1).var(ddof=1)) if len(g) >= 2 else 0.0,
+        "治療期間_std": float(g["治療期間"].std(ddof=1)) if len(g) >= 2 else 0.0,
+        "通院回数_mean": float(visits_count.mean()),
+        "通院回数_std": float(visits_count.std(ddof=1)) if len(g) >= 2 else 0.0,
         "n_patients": int(g.shape[0]),
     }
     return res
@@ -711,7 +710,8 @@ def tx_plot_fig(dfpt_in: pd.DataFrame, dftx: pd.DataFrame, n=10, mo_weight=1):
     # 軸（共通）
     for i in range(len(para_table)):
         for j in range(len(para_table[i])):
-            fig.update_xaxes(title="月齢", range=[xmin, xmax], row=i + 1, col=j + 1)
+            # fig.update_xaxes(title="月齢", range=[xmin, xmax], row=i + 1, col=j + 1)
+          fig.update_xaxes(range=[xmin, xmax], row=i + 1, col=j + 1)
 
     return fig, similar_patients
 
@@ -751,8 +751,8 @@ if "similar_summary" in st.session_state:
     st.markdown("## 治療患者の通院期間・回数")
     s = st.session_state["similar_summary"]
     st.write(f"最適N={s['最適人数N']} / 探索対象={s['探索対象人数']}")
-    st.write(f"通院期間 平均={s['治療期間_mean']:.2f}  分散={s['治療期間_var']:.2f}")
-    st.write(f"通院回数 平均={s['通院回数_mean']:.2f}  分散={s['通院回数_var']:.2f}")
+    st.write(f"通院期間（平均±標準偏差）= {s['治療期間_mean']:.2f} ± {s['治療期間_std']:.2f} か月")
+    st.write(f"通院回数（平均±標準偏差）= {s['通院回数_mean']:.2f} ± {s['通院回数_std']:.2f} 回")
 
 if "tx_plot_fig" in st.session_state:
     st.markdown("## 治療患者の経過")
