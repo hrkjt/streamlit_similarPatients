@@ -289,7 +289,7 @@ neg_all = df_all[pd.to_numeric(df_all["月齢"], errors="coerce") < 0][["ダミ�
 neg_first = df_first[pd.to_numeric(df_first["月齢"], errors="coerce") < 0][["ダミーID","月齢"]].dropna()
 
 if (len(neg_all) == 0) and (len(neg_first) == 0):
-  st.write("月齢<0 は見つかりませんでした。")
+  # st.write("月齢<0 は見つかりませんでした。")
 else:
   st.write("エラー検出：月齢がマイナスの外れ値")
 
