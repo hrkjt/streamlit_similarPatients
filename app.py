@@ -460,7 +460,7 @@ def co_plot_fig(dfpt):
 
     parameters = ['月齢','前後径','左右径','頭囲','短頭率','前頭部対称率','後頭部対称率','CA','CVAI','APR']
 
-    dfco_pre = dfco_pre_global = dfco_pre.copy()
+    dfco_pre_global = dfco_pre.copy()
 
     dfpt_z = (dfpt[parameters] - dfco_pre_global[parameters].mean()) / dfco_pre_global[parameters].std()
     dfpt_w = 10**abs(dfpt_z)
