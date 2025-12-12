@@ -331,7 +331,7 @@ dfpt = pd.DataFrame(data={
 # st.dataframe(dfpt, use_container_width=True)
 
 def tx_rate_st(dfpt, df_first=df_first, n=30):
-    st.write("### tx_rate 実行ログ")
+    st.write("### 類似症例の治療率")
 
     dfpt = dfpt.copy()
     df_first = df_first.copy()
@@ -722,13 +722,13 @@ def tx_plot_fig(dfpt_in: pd.DataFrame, dftx: pd.DataFrame, n=10, mo_weight=1):
 # -------------------------
 st.subheader("実行")
 
-run_all = st.button("解析を実行（tx_rate + similar + tx_plot + co_plot）", use_container_width=True)
+run_all = st.button("解析を実行", use_container_width=True)
 
 if run_all:
     with st.spinner("計算中...（初回は時間がかかります）"):
         # 実行して session_state に保存（再描画で再計算しない）
         st.session_state["tx_rate_summary"] = tx_rate_st(dfpt.copy(), df_first=df_first, n=30)
-        st.session_state["similar_summary"] = similar_pts_st(dfpt.copy(), min=5, remove_self=False)
+        # st.session_state["similar_summary"] = similar_pts_st(dfpt.copy(), min=5, remove_self=False)
 
         n = 100
         mo_weight = 10
@@ -740,26 +740,26 @@ if run_all:
         st.session_state["co_plot_fig"] = fig_co
 
 # 表示（ボタン押さなくても session_state にあれば出す）
-if "tx_rate_summary" in st.session_state:
-    st.markdown("## tx_rate（平均・分散）")
-    s = st.session_state["tx_rate_summary"]
-    st.write(f"治療率: {s['治療率(%)']:.1f}%  / 最適N={s['最適人数N']}  / 探索対象={s['探索対象人数']}")
-    st.write(f"治療期間 平均={s['治療期間_mean']:.2f}  分散={s['治療期間_var']:.2f}")
-    st.write(f"通院回数 平均={s['通院回数_mean']:.2f}  分散={s['通院回数_var']:.2f}")
+# if "tx_rate_summary" in st.session_state:
+#     st.markdown("## tx_rate（平均・分散）")
+#     s = st.session_state["tx_rate_summary"]
+#     st.write(f"治療率: {s['治療率(%)']:.1f}%  / 最適N={s['最適人数N']}  / 探索対象={s['探索対象人数']}")
+#     st.write(f"治療期間 平均={s['治療期間_mean']:.2f}  分散={s['治療期間_var']:.2f}")
+#     st.write(f"通院回数 平均={s['通院回数_mean']:.2f}  分散={s['通院回数_var']:.2f}")
 
 if "similar_summary" in st.session_state:
-    st.markdown("## similar_pts（平均・分散）")
+    st.markdown("## 治療患者の通院期間・回数")
     s = st.session_state["similar_summary"]
     st.write(f"最適N={s['最適人数N']} / 探索対象={s['探索対象人数']}")
-    st.write(f"治療期間 平均={s['治療期間_mean']:.2f}  分散={s['治療期間_var']:.2f}")
+    st.write(f"通院期間 平均={s['治療期間_mean']:.2f}  分散={s['治療期間_var']:.2f}")
     st.write(f"通院回数 平均={s['通院回数_mean']:.2f}  分散={s['通院回数_var']:.2f}")
 
 if "tx_plot_fig" in st.session_state:
-    st.markdown("## tx_plot")
+    st.markdown("## 治療患者の経過")
     st.plotly_chart(st.session_state["tx_plot_fig"], use_container_width=True)
 
 if "co_plot_fig" in st.session_state:
-    st.markdown("## co_plot")
+    st.markdown("## 経過観察患者の経過")
     st.plotly_chart(st.session_state["co_plot_fig"], use_container_width=True)
 
 
