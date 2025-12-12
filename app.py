@@ -476,13 +476,25 @@ def similar_pts_st(dfpt, min=5, remove_self=False):
         "members": list(members),
     }
 
+def should_show_co_plot(dfpt: pd.DataFrame, dfcon: pd.DataFrame) -> bool:
+    """類似経過観察の初回月齢(min)が、お子様月齢より大きいIDが1人でもいれば True"""
+    if dfcon is None or dfcon.empty:
+        return False
+
+    m_child = float(dfpt["月齢"].iloc[0])
+
+    first_mo = (
+        dfcon.groupby("ダミーID")["月齢"]
+            .min()
+    )
+
+    return bool((first_mo > m_child).any())
 
 def co_plot_fig(dfpt):
     import plotly.express as px
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
-    # hoverで見たい項目
     HOVER_COLS = ["月齢","頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI","前後径","左右径"]
 
     dfpt = dfpt.copy()
@@ -506,8 +518,21 @@ def co_plot_fig(dfpt):
         )
 
     rank = list(dfco_pre_global.sort_values("w_delta")["ダミーID"])[:10]
-    dfcon = df_co[df_co["ダミーID"].isin(rank)]
+    dfcon = df_co[df_co["ダミーID"].isin(rank)].copy()
 
+    # ★ 追加：表示するか判定
+    show = should_show_co_plot(dfpt, dfcon)
+
+    # 参考情報（デバッグ用に返す）
+    m_child = float(dfpt["月齢"].iloc[0])
+    first_mo = dfcon.groupby("ダミーID")["月齢"].min() if not dfcon.empty else pd.Series(dtype=float)
+    reason = {"m_child": m_child, "first_mo_min": float(first_mo.min()) if len(first_mo) else None,
+              "first_mo_max": float(first_mo.max()) if len(first_mo) else None}
+
+    if not show:
+        return None, show, reason  # ★ 表示しない時は fig を作らない
+
+    # ===== ここから先は今の描画ロジックそのまま =====
     para_table = [
         ["頭囲", "短頭率"],
         ["前頭部対称率", "後頭部対称率"],
@@ -515,12 +540,8 @@ def co_plot_fig(dfpt):
         ["前後径", "左右径"],
     ]
 
-    fig = make_subplots(
-        rows=4, cols=2,
-        subplot_titles=sum(para_table, [])
-    )
+    fig = make_subplots(rows=4, cols=2, subplot_titles=sum(para_table, []))
 
-    # hover用テンプレート
     hover_cols = [c for c in HOVER_COLS if c in dfpt.columns]
 
     def hovertemplate(prefix: str):
@@ -533,7 +554,7 @@ def co_plot_fig(dfpt):
         lines.append("<extra></extra>")
         return "".join(lines)
 
-    # ---------- お子様 ----------
+    # お子様
     custom_pt = dfpt[hover_cols].to_numpy()
     for i in range(4):
         for j in range(2):
@@ -551,7 +572,7 @@ def co_plot_fig(dfpt):
                 row=i+1, col=j+1
             )
 
-    # ---------- 経過観察患者 ----------
+    # 類似経過観察
     colors = px.colors.qualitative.Alphabet
     c = 0
     for pid in dfcon["ダミーID"].unique():
@@ -579,18 +600,8 @@ def co_plot_fig(dfpt):
                 )
         c += 1
 
-    fig.update_layout(
-        height=1300,
-        showlegend=False,
-        margin=dict(l=10, r=10, t=50, b=10),
-    )
-
-    max_mo = float(dfcon["月齢"].max()) if len(dfcon) else float("-inf")
-    child_mo = float(dfpt["月齢"].iloc[0])
-    should_show = (max_mo > child_mo)  # 1人でもお子様より月齢が大きければ True
-    
-    return fig, should_show, max_mo
-
+    fig.update_layout(height=1300, showlegend=False, margin=dict(l=10, r=10, t=50, b=10))
+    return fig, show, reason
 
 def _visits_summary(df_tx_pre_post: pd.DataFrame, members):
     """members(ダミーID一覧) から 治療期間/通院回数 を患者単位で集計して mean/std を返す"""
@@ -805,10 +816,13 @@ if run_all:
         st.session_state["tx_plot_fig"] = fig_tx
         st.session_state["tx_members"] = members
 
-        fig_co, show_co, co_max_mo = co_plot_fig(dfpt.copy())
-        st.session_state["co_plot_fig"] = fig_co
-        st.session_state["show_co_plot"] = show_co
-        st.session_state["co_max_mo"] = co_max_mo
+        fig_co, show_co, reason = co_plot_fig(dfpt.copy())
+        
+        if show_co and fig_co is not None:
+            st.session_state["co_plot_fig"] = fig_co
+        else:
+            st.session_state.pop("co_plot_fig", None)  # 前回の残りを消す
+            st.session_state["co_plot_skip_reason"] = reason
 
 
 # 表示（ボタン押さなくても session_state にあれば出す）
@@ -840,9 +854,15 @@ if "tx_plot_fig" in st.session_state:
     st.markdown("## 治療患者の経過")
     st.plotly_chart(st.session_state["tx_plot_fig"], use_container_width=True)
 
-if "co_plot_fig" in st.session_state and st.session_state.get("show_co_plot", False):
+if "co_plot_fig" in st.session_state:
     st.markdown("## 経過観察患者の経過")
     st.plotly_chart(st.session_state["co_plot_fig"], use_container_width=True)
+else:
+    # 必要なら理由を表示（デバッグ用）
+    # r = st.session_state.get("co_plot_skip_reason")
+    # if r:
+    #     st.caption(f"co_plot非表示: お子様月齢={r['m_child']:.2f}, 類似初回月齢min={r['first_mo_min']}, max={r['first_mo_max']}")
+    pass
 
 # st.subheader("実行")
 
