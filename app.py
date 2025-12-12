@@ -401,7 +401,7 @@ def tx_rate_st(dfpt, df_first=df_first, n=30):
 
 
 def similar_pts_st(dfpt, min=5, remove_self=False):
-    st.write("### similar_pts 実行ログ")
+    # st.write("### similar_pts 実行ログ")
 
     dfpt = dfpt.copy()
     dfpt["APR"] = dfpt["前頭部対称率"] / dfpt["後頭部対称率"]
@@ -419,7 +419,7 @@ def similar_pts_st(dfpt, min=5, remove_self=False):
     if len(dftx_pre_temp) >= 10:
         dftx_pre2 = dftx_pre_temp
 
-    st.write(f"探索対象人数: **{dftx_pre2['ダミーID'].nunique()} 人**")
+    # st.write(f"探索対象人数: **{dftx_pre2['ダミーID'].nunique()} 人**")
 
     dfpt_z = (dfpt[parameters] - dftx_pre2[parameters].mean()) / dftx_pre2[parameters].std()
     dfpt_w = 10 ** abs(dfpt_z)
@@ -442,7 +442,7 @@ def similar_pts_st(dfpt, min=5, remove_self=False):
             d = sum_delta
             N = i
 
-    st.write(f"最適人数: **{N} 人**")
+    # st.write(f"最適人数: **{N} 人**")
 
     members = dftx_pre2.sort_values("w_delta").head(N)["ダミーID"].unique()
     visits = _visits_summary(df_tx_pre_post, members)
@@ -562,7 +562,7 @@ def co_plot_fig(dfpt):
         c += 1
 
     fig.update_layout(
-        height=650,
+        height=1300,
         showlegend=False,
         margin=dict(l=10, r=10, t=50, b=10),
     )
@@ -749,7 +749,7 @@ def tx_plot_fig(dfpt_in: pd.DataFrame, dftx: pd.DataFrame, n=10, mo_weight=1):
     # ------- 見やすさ調整（legend消す、サイズ、余白） -------
     fig.update_layout(
         showlegend=False,                 # 完全非表示
-        height=650,                       # ここで全体の高さを抑える
+        height=1300,                       # ここで全体の高さを抑える
         margin=dict(l=10, r=10, t=50, b=10),
     )
 
