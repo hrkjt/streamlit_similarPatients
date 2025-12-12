@@ -909,10 +909,11 @@ if run_all:
 #     st.write(f"通院回数 平均={s['通院回数_mean']:.2f}  分散={s['通院回数_var']:.2f}")
 
 if "similar_summary" in st.session_state:
-    st.markdown("## 治療患者の通院期間・回数")
+    st.markdown("## 治療患者の集計")
     s = st.session_state["similar_summary"]
     st.write(f"最適N={s['最適人数N']} / 探索対象={s['探索対象人数']}")
 
+    st.markdown("### 通院期間・回数")
     m = s.get("治療期間_mean")
     sd = s.get("治療期間_std")
     if m is not None and sd is not None:
