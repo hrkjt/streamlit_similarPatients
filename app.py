@@ -913,27 +913,27 @@ if "similar_summary" in st.session_state:
     s = st.session_state["similar_summary"]
     st.write(f"最適N={s['最適人数N']} / 探索対象={s['探索対象人数']}")
 
-    st.markdown("### 通院期間・回数")
+    st.markdown("### 通院期間・回数（平均±標準偏差）")
     m = s.get("治療期間_mean")
     sd = s.get("治療期間_std")
     if m is not None and sd is not None:
       # st.write(f"通院期間（平均±標準偏差）= **{m:.1f} ± {sd:.1f} か月**")
-      st.markdown(f"通院期間（平均±標準偏差）= **{m:.1f} ± {sd:.1f} か月**")
+      st.markdown(f"通院期間 = **{m:.1f} ± {sd:.1f} か月**")
 
     m = s.get("通院回数_mean")
     sd = s.get("通院回数_std")
     if m is not None and sd is not None:
       # st.write(f"通院回数（平均±標準偏差）= **{m:.1f} ± {sd:.1f} 回**")
-      st.markdown(f"通院回数（平均±標準偏差）= **{m:.1f} ± {sd:.1f} 回**")
+      st.markdown(f"通院回数 = **{m:.1f} ± {sd:.1f} 回**")
 
-    st.markdown("### 指標の変化量")
+    st.markdown("### 指標の変化量（平均±標準偏差）")
     
     delta_targets = ["頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI"]
     for name in delta_targets:
         m = s.get(f"{name}_delta_mean")
         sd = s.get(f"{name}_delta_std")
         if m is not None and sd is not None:
-            st.markdown(f"- {name}（平均±標準偏差）: **{m:.1f} ± {sd:.1f}**")
+            st.markdown(f"- {name}: **{m:.1f} ± {sd:.1f}**")
 
 if "tx_plot_fig" in st.session_state:
     st.markdown("## 治療患者の経過")
