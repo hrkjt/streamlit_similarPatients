@@ -476,6 +476,7 @@ def similar_pts_st(dfpt, min=5, remove_self=False):
 
     members = dftx_pre2.sort_values("w_delta").head(N)["ダミーID"].unique()
     visits = _visits_summary(df_tx_pre_post, members)
+    delta = _delta_summary(df_tx_pre_post, members)   # ★追加
 
     return {
         "探索対象人数": int(dftx_pre2["ダミーID"].nunique()),
@@ -485,6 +486,21 @@ def similar_pts_st(dfpt, min=5, remove_self=False):
         "治療期間_std": visits["治療期間_std"] if visits else None,
         "通院回数_mean": visits["通院回数_mean"] if visits else None,
         "通院回数_std": visits["通院回数_std"] if visits else None,
+
+        # ★変化量（平均±標準偏差）を追加
+        "頭囲_delta_mean": delta["頭囲_delta_mean"] if delta else None,
+        "頭囲_delta_std":  delta["頭囲_delta_std"]  if delta else None,
+        "短頭率_delta_mean": delta["短頭率_delta_mean"] if delta else None,
+        "短頭率_delta_std":  delta["短頭率_delta_std"]  if delta else None,
+        "前頭部対称率_delta_mean": delta["前頭部対称率_delta_mean"] if delta else None,
+        "前頭部対称率_delta_std":  delta["前頭部対称率_delta_std"]  if delta else None,
+        "後頭部対称率_delta_mean": delta["後頭部対称率_delta_mean"] if delta else None,
+        "後頭部対称率_delta_std":  delta["後頭部対称率_delta_std"]  if delta else None,
+        "CA_delta_mean": delta["CA_delta_mean"] if delta else None,
+        "CA_delta_std":  delta["CA_delta_std"]  if delta else None,
+        "CVAI_delta_mean": delta["CVAI_delta_mean"] if delta else None,
+        "CVAI_delta_std":  delta["CVAI_delta_std"]  if delta else None,
+      
         "members": list(members),
     }
 
@@ -644,6 +660,43 @@ def _visits_summary(df_tx_pre_post: pd.DataFrame, members):
         "通院回数_std": float(visits_count.std(ddof=1)) if len(g) >= 2 else 0.0,
         "n_patients": int(g.shape[0]),
     }
+    return res
+
+def _delta_summary(df_tx_pre_post: pd.DataFrame, members):
+    """
+    members(ダミーID一覧)について、治療前→最終の変化量(最終-初回)の mean/std を返す
+    対象: 頭囲,短頭率,前頭部対称率,後頭部対称率,CA,CVAI
+    """
+    if members is None or len(members) == 0:
+        return None
+
+    cols = ["頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI"]
+
+    tmp = df_tx_pre_post[df_tx_pre_post["ダミーID"].isin(members)].copy()
+    if tmp.empty:
+        return None
+
+    # 数値化（安全）
+    for c in cols + ["月齢"]:
+        if c in tmp.columns:
+            tmp[c] = pd.to_numeric(tmp[c], errors="coerce")
+
+    # 患者ごとに、最初(治療前月齢の最小)と最後(月齢の最大)を取る
+    tmp = tmp.sort_values(["ダミーID", "月齢"])
+    first = tmp.groupby("ダミーID", as_index=False).first()
+    last  = tmp.groupby("ダミーID", as_index=False).last()
+
+    # 差分（last - first）
+    deltas = last[cols].to_numpy() - first[cols].to_numpy()
+    delta_df = pd.DataFrame(deltas, columns=[f"Δ{c}" for c in cols])
+    delta_df["ダミーID"] = first["ダミーID"].values
+
+    res = {"n_patients_delta": int(delta_df.shape[0])}
+    for c in cols:
+        s = delta_df[f"Δ{c}"]
+        res[f"{c}_delta_mean"] = float(s.mean())
+        res[f"{c}_delta_std"]  = float(s.std(ddof=1)) if len(s) >= 2 else 0.0
+
     return res
 
 
@@ -871,6 +924,15 @@ if "similar_summary" in st.session_state:
     if m is not None and sd is not None:
       # st.write(f"通院回数（平均±標準偏差）= **{m:.1f} ± {sd:.1f} 回**")
       st.markdown(f"通院回数（平均±標準偏差）= **{m:.1f} ± {sd:.1f} 回**")
+
+    st.markdown("### 指標の変化量")
+    
+    delta_targets = ["頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI"]
+    for name in delta_targets:
+        m = s.get(f"{name}_delta_mean")
+        sd = s.get(f"{name}_delta_std")
+        if m is not None and sd is not None:
+            st.markdown(f"- {name}（平均±標準偏差）: **{m:.1f} ± {sd:.1f}**")
 
 if "tx_plot_fig" in st.session_state:
     st.markdown("## 治療患者の経過")
