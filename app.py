@@ -1273,7 +1273,7 @@ if "similar_summary" in st.session_state:
             st.markdown(f"- {name}: **{m:.1f} ± {sd:.1f}**")
 
 if "tx_plot_fig" in st.session_state:
-    st.markdown("## 治療患者の経過")
+    st.markdown("## 類似の治療患者10人の経過")
     st.plotly_chart(st.session_state["tx_plot_fig"], use_container_width=True)
 
 if "co_plot_fig" in st.session_state:
