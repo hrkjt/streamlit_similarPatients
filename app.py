@@ -371,10 +371,18 @@ def tx_rate_st(dfpt, df_first=df_first, treated_set=None, n=30):
     for p in parameters:
         df_first2["w_delta"] += dfpt_w[p].iloc[0] * abs(df_first2["z_"+p] - dfpt_z[p].iloc[0])**2
 
-    # 最適N探索
+    # 最適N探索（N=1を避ける）
+    min_N = 5  # ここを 3 や 10 にしてもOK（要件に合わせて）
+    max_N = min(n, len(df_first2))  # 探索可能な上限
+    
+    # 候補が少ないときの保険
+    if max_N < min_N:
+        min_N = max_N  # 取れるだけ取る（0になるなら0扱い）
+    
     d = 1e10
-    N = 1
-    for i in range(1, n):
+    N = min_N if min_N >= 1 else 0
+    
+    for i in range(min_N, max_N + 1):
         dfalln = df_first2.sort_values("w_delta").head(i)
         dfn = dfalln[parameters].agg(["mean"]).reset_index(drop=True)
         sum_delta = ((dfpt[parameters] - dfn)**2).sum(axis=1).iloc[0]
@@ -387,7 +395,7 @@ def tx_rate_st(dfpt, df_first=df_first, treated_set=None, n=30):
     dfallN = df_first2.sort_values("w_delta").head(N)
     
     # treated_patients（df_h由来の治療実施者ID）で数える
-    treated_set = set(df_h["ダミーID"].astype(str).unique())
+    # treated_set = set(df_h["ダミーID"].astype(str).unique())
     similar_ids = dfallN["ダミーID"].astype(str).unique()
     
     ntx = sum(pid in treated_set for pid in similar_ids)
@@ -812,12 +820,14 @@ if "similar_summary" in st.session_state:
     m = s.get("治療期間_mean")
     sd = s.get("治療期間_std")
     if m is not None and sd is not None:
-        st.write(f"通院期間（平均±標準偏差）= **{m:.1f} ± {sd:.1f} か月**")
+      # st.write(f"通院期間（平均±標準偏差）= **{m:.1f} ± {sd:.1f} か月**")
+      st.markdown(f"通院期間（平均±標準偏差）= **{m:.1f} ± {sd:.1f} か月**")
 
     m = s.get("通院回数_mean")
     sd = s.get("通院回数_std")
     if m is not None and sd is not None:
-        st.write(f"通院回数（平均±標準偏差）= **{m:.1f} ± {sd:.1f} 回**")
+      # st.write(f"通院回数（平均±標準偏差）= **{m:.1f} ± {sd:.1f} 回**")
+      st.markdown(f"通院回数（平均±標準偏差）= **{m:.1f} ± {sd:.1f} 回**")
 
 if "tx_plot_fig" in st.session_state:
     st.markdown("## 治療患者の経過")
