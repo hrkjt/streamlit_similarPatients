@@ -271,6 +271,11 @@ with st.sidebar:
         st.cache_data.clear()
         st.success("キャッシュをクリアしました。再読み込みしてください。")
 
+    if st.button("解析結果をクリア"):
+        for k in ["tx_rate_summary", "similar_summary", "tx_plot_fig", "tx_members", "co_plot_fig"]:
+            st.session_state.pop(k, None)
+        st.success("解析結果をクリアしました")
+
 with st.spinner("APIからデータ取得＆前処理中...（初回は時間がかかります）"):
     data, df_all, df_h, df_first, df_tx_pre_post, df_co, dfco_pre = load_and_prepare_data(api_url)
 
@@ -769,7 +774,8 @@ if run_all:
     with st.spinner("計算中...（初回は時間がかかります）"):
         # 実行して session_state に保存（再描画で再計算しない）
         st.session_state["tx_rate_summary"] = tx_rate_st(dfpt.copy(), df_first=df_first, n=30)
-        # st.session_state["similar_summary"] = similar_pts_st(dfpt.copy(), min=5, remove_self=False)
+        st.session_state["similar_summary"] = similar_pts_st(dfpt.copy(), min=5, remove_self=False)
+
 
         n = 100
         mo_weight = 10
@@ -792,8 +798,16 @@ if "similar_summary" in st.session_state:
     st.markdown("## 治療患者の通院期間・回数")
     s = st.session_state["similar_summary"]
     st.write(f"最適N={s['最適人数N']} / 探索対象={s['探索対象人数']}")
-    st.write(f"通院期間（平均±標準偏差）= {s['治療期間_mean']:.2f} ± {s['治療期間_std']:.2f} か月")
-    st.write(f"通院回数（平均±標準偏差）= {s['通院回数_mean']:.2f} ± {s['通院回数_std']:.2f} 回")
+
+    m = s.get("治療期間_mean")
+    sd = s.get("治療期間_std")
+    if m is not None and sd is not None:
+        st.write(f"通院期間（平均±標準偏差）= {m:.2f} ± {sd:.2f} か月")
+
+    m = s.get("通院回数_mean")
+    sd = s.get("通院回数_std")
+    if m is not None and sd is not None:
+        st.write(f"通院回数（平均±標準偏差）= {m:.2f} ± {sd:.2f} 回")
 
 if "tx_plot_fig" in st.session_state:
     st.markdown("## 治療患者の経過")
