@@ -802,12 +802,12 @@ if "similar_summary" in st.session_state:
     m = s.get("治療期間_mean")
     sd = s.get("治療期間_std")
     if m is not None and sd is not None:
-        st.write(f"通院期間（平均±標準偏差）= {m:.2f} ± {sd:.2f} か月")
+        st.write(f"通院期間（平均±標準偏差）= {m:.1f} ± {sd:.1f} か月")
 
     m = s.get("通院回数_mean")
     sd = s.get("通院回数_std")
     if m is not None and sd is not None:
-        st.write(f"通院回数（平均±標準偏差）= {m:.2f} ± {sd:.2f} 回")
+        st.write(f"通院回数（平均±標準偏差）= {m:.1f} ± {sd:.1f} 回")
 
 if "tx_plot_fig" in st.session_state:
     st.markdown("## 治療患者の経過")
