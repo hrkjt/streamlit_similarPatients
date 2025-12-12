@@ -455,74 +455,115 @@ def similar_pts_st(dfpt, min=5, remove_self=False):
 
 
 def co_plot_fig(dfpt):
-    dfpt = dfpt.copy()
-    dfpt['APR'] = dfpt['前頭部対称率']/dfpt['後頭部対称率']
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 
-    parameters = ['月齢','前後径','左右径','頭囲','短頭率','前頭部対称率','後頭部対称率','CA','CVAI','APR']
+    # hoverで見たい項目
+    HOVER_COLS = ["月齢","頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI","前後径","左右径"]
+
+    dfpt = dfpt.copy()
+    dfpt["APR"] = dfpt["前頭部対称率"] / dfpt["後頭部対称率"]
+
+    parameters = ["月齢","前後径","左右径","頭囲","短頭率",
+                  "前頭部対称率","後頭部対称率","CA","CVAI","APR"]
 
     dfco_pre_global = dfco_pre.copy()
 
     dfpt_z = (dfpt[parameters] - dfco_pre_global[parameters].mean()) / dfco_pre_global[parameters].std()
-    dfpt_w = 10**abs(dfpt_z)
+    dfpt_w = 10 ** abs(dfpt_z)
 
-    if dfpt_w['月齢'].iloc[0] < dfpt_w.T.max().iloc[0]:
-        dfpt_w['月齢'] = dfpt_w.T.max().iloc[0]
+    if dfpt_w["月齢"].iloc[0] < dfpt_w.T.max().iloc[0]:
+        dfpt_w["月齢"] = dfpt_w.T.max().iloc[0]
 
-    dfco_pre_global['w_delta'] = 0
+    dfco_pre_global["w_delta"] = 0
     for p in parameters:
-        dfco_pre_global['w_delta'] += dfpt_w[p].iloc[0] * abs(df_first['z_'+p] - dfpt_z[p].iloc[0])**2
+        dfco_pre_global["w_delta"] += (
+            dfpt_w[p].iloc[0] * abs(df_first["z_" + p] - dfpt_z[p].iloc[0]) ** 2
+        )
 
-    rank = list(dfco_pre_global.sort_values('w_delta')['ダミーID'])[:10]
-    dfcon = df_co[df_co['ダミーID'].isin(rank)]
+    rank = list(dfco_pre_global.sort_values("w_delta")["ダミーID"])[:10]
+    dfcon = df_co[df_co["ダミーID"].isin(rank)]
 
     para_table = [
-        ['頭囲','短頭率'],
-        ['前頭部対称率','後頭部対称率'],
-        ['CA','CVAI'],
-        ['前後径','左右径']
+        ["頭囲", "短頭率"],
+        ["前頭部対称率", "後頭部対称率"],
+        ["CA", "CVAI"],
+        ["前後径", "左右径"],
     ]
 
-    fig = make_subplots(rows=4, cols=2, subplot_titles=sum(para_table, []))
+    fig = make_subplots(
+        rows=4, cols=2,
+        subplot_titles=sum(para_table, [])
+    )
 
-    # お子様
+    # hover用テンプレート
+    hover_cols = [c for c in HOVER_COLS if c in dfpt.columns]
+
+    def hovertemplate(prefix: str):
+        lines = [f"{prefix}<br>"]
+        for i, c in enumerate(hover_cols):
+            if c == "月齢":
+                lines.append(f"{c}=%{{customdata[{i}]:.2f}}<br>")
+            else:
+                lines.append(f"{c}=%{{customdata[{i}]:.1f}}<br>")
+        lines.append("<extra></extra>")
+        return "".join(lines)
+
+    # ---------- お子様 ----------
+    custom_pt = dfpt[hover_cols].to_numpy()
     for i in range(4):
         for j in range(2):
             fig.add_trace(
                 go.Scatter(
-                    x=dfpt['月齢'],
+                    x=dfpt["月齢"],
                     y=dfpt[para_table[i][j]],
-                    name='お子様',
-                    marker=dict(color='green', size=10),
-                    mode='markers+lines',
-                    showlegend=False,   # ★追加
+                    mode="lines+markers",
+                    marker=dict(color="green", size=9),
+                    line=dict(width=3),
+                    showlegend=False,
+                    customdata=custom_pt,
+                    hovertemplate=hovertemplate("お子様"),
                 ),
                 row=i+1, col=j+1
             )
 
+    # ---------- 経過観察患者 ----------
     colors = px.colors.qualitative.Alphabet
     c = 0
-    for pid in dfcon['ダミーID'].unique():
-        tmp = dfcon[dfcon['ダミーID']==pid]
+    for pid in dfcon["ダミーID"].unique():
+        tmp = dfcon[dfcon["ダミーID"] == pid].copy()
+        if tmp.empty:
+            continue
+
+        hover_cols_sim = [c for c in hover_cols if c in tmp.columns]
+        custom_sim = tmp[hover_cols_sim].to_numpy()
+
         for i in range(4):
             for j in range(2):
                 fig.add_trace(
                     go.Scatter(
-                        x=tmp['月齢'],
+                        x=tmp["月齢"],
                         y=tmp[para_table[i][j]],
-                        name=pid,
-                        marker=dict(color=colors[c % len(colors)]),
-                        mode='lines+markers',
-                        showlegend=False,  # ★追加
+                        mode="lines+markers",
+                        marker=dict(size=5, color=colors[c % len(colors)]),
+                        line=dict(width=1),
+                        showlegend=False,
+                        customdata=custom_sim,
+                        hovertemplate=hovertemplate(f"ID={pid}"),
                     ),
                     row=i+1, col=j+1
                 )
         c += 1
 
     fig.update_layout(
-        height=900, width=1200,
-        showlegend=False,  # ★追加（念のため）
+        height=650,
+        showlegend=False,
+        margin=dict(l=10, r=10, t=50, b=10),
     )
+
     return fig
+
 
 def _visits_summary(df_tx_pre_post: pd.DataFrame, members):
     """members(ダミーID一覧) から 治療期間/通院回数 を患者単位で集計して mean/std を返す"""
