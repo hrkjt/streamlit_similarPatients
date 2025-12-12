@@ -256,8 +256,10 @@ def load_and_prepare_data(api_url: str):
         for i in parameters + ["APR"]:
             dfx["z_"+i] = (dfx[i] - dfx[i].mean())/dfx[i].std()
 
+    treated_set = set(df_h["ダミーID"].astype(str).unique())
+  
     # 以降、既存関数が参照する「グローバル」を返しておく
-    return data, df, df_h, df_first_z, df_tx_pre_post, df_co, dfco_pre
+    return data, df, df_h, df_first_z, df_tx_pre_post, df_co, dfco_pre, treated_set
 
 
 with st.sidebar:
@@ -277,7 +279,7 @@ with st.sidebar:
         st.success("解析結果をクリアしました")
 
 with st.spinner("APIからデータ取得＆前処理中...（初回は時間がかかります）"):
-    data, df_all, df_h, df_first, df_tx_pre_post, df_co, dfco_pre = load_and_prepare_data(api_url)
+    data, df_all, df_h, df_first, df_tx_pre_post, df_co, dfco_pre, treated_set = load_and_prepare_data(api_url)
 
 # 既存関数が参照している前提のグローバルを上書き（Colab移植の都合）
 globals()["df_first"] = df_first
@@ -335,7 +337,10 @@ dfpt = pd.DataFrame(data={
 # st.write("入力データ（dfpt）")
 # st.dataframe(dfpt, use_container_width=True)
 
-def tx_rate_st(dfpt, df_first=df_first, n=30):
+def tx_rate_st(dfpt, df_first=df_first, treated_set=None, n=30):
+    if treated_set is None:
+        treated_set = set(df_h["ダミーID"].astype(str).unique())
+      
     st.write("### 類似症例の治療率")
 
     dfpt = dfpt.copy()
@@ -380,11 +385,16 @@ def tx_rate_st(dfpt, df_first=df_first, n=30):
     st.write(f"最適人数: **{N} 人**（誤差スコア {round(d,2)}）")
 
     dfallN = df_first2.sort_values("w_delta").head(N)
-    outcome_list = list(dfallN["治療ステータス"])
-    ntx = outcome_list.count("治療前")
-    tx_rate = (ntx / N * 100) if N > 0 else 0.0
+    
+    # treated_patients（df_h由来の治療実施者ID）で数える
+    treated_set = set(df_h["ダミーID"].astype(str).unique())
+    similar_ids = dfallN["ダミーID"].astype(str).unique()
+    
+    ntx = sum(pid in treated_set for pid in similar_ids)
+    tx_rate = (ntx / len(similar_ids) * 100) if len(similar_ids) > 0 else 0.0
 
-    st.write(f"治療率: **{round(tx_rate,1)}%**（{ntx}人 / {N}人）")
+    # st.write(f"治療率: **{round(tx_rate,1)}%**（{ntx}人 / {N}人）")
+    st.write(f"治療率: **{round(tx_rate,1)}%**（{ntx}人 / {len(similar_ids)}人）")
 
     visits = _visits_summary(df_tx_pre_post, dfallN["ダミーID"].unique())
     return {
