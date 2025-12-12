@@ -22,6 +22,9 @@ import re
 
 import itertools
 
+from patsy import dmatrix
+import statsmodels.api as sm
+
 url = st.secrets["API_URL"]
 
 response = requests.get(url)
@@ -869,6 +872,110 @@ def tx_plot_fig(dfpt_in: pd.DataFrame, dftx: pd.DataFrame, n=10, mo_weight=1):
 
     return fig, similar_patients
 
+@st.cache_resource(show_spinner=False)
+def _fit_quantile_spline_models(df_first: pd.DataFrame, ycol: str, xcol: str,
+                               quantiles=(0.03,0.10,0.25,0.50,0.75,0.90,0.97),
+                               spline_df: int = 7):
+    """
+    df_first の (xcol,ycol) から分位点回帰(QuantReg)モデルを複数qで学習して返す
+    """
+    d = df_first[[xcol, ycol]].copy()
+    d[xcol] = pd.to_numeric(d[xcol], errors="coerce")
+    d[ycol] = pd.to_numeric(d[ycol], errors="coerce")
+    d = d.dropna()
+    if len(d) < 80:
+        raise ValueError(f"{ycol}: 学習データが少なすぎます (n={len(d)})")
+
+    x = d[xcol].to_numpy()
+    y = d[ycol].to_numpy()
+
+    # B-spline 基底（滑らかな曲線を作る）
+    # include_intercept=True で切片込みの設計行列になるので、sm.add_constant不要
+    X = dmatrix(f"bs(x, df={spline_df}, degree=3, include_intercept=True)",
+                {"x": x}, return_type="dataframe")
+
+    models = {}
+    for q in quantiles:
+        mod = sm.QuantReg(y, X)
+        res = mod.fit(q=q)
+        models[q] = res
+
+    meta = {
+        "x_min": float(np.min(x)),
+        "x_max": float(np.max(x)),
+        "n": int(len(d)),
+        "spline_df": spline_df,
+    }
+    return models, meta
+
+
+def quantile_growth_curve_fig(df_first: pd.DataFrame, dfpt: pd.DataFrame, ycol: str,
+                              xcol: str = "月齢",
+                              centiles=(3,10,25,50,75,90,97),
+                              spline_df: int = 7,
+                              grid_n: int = 140):
+    """
+    センタイル曲線（Quantile Regression + spline）＋お子様点を返す
+    """
+    qs = tuple([c/100 for c in centiles])
+
+    models, meta = _fit_quantile_spline_models(
+        df_first=df_first, ycol=ycol, xcol=xcol, quantiles=qs, spline_df=spline_df
+    )
+
+    x_grid = np.linspace(meta["x_min"], meta["x_max"], grid_n)
+    Xg = dmatrix(f"bs(x, df={meta['spline_df']}, degree=3, include_intercept=True)",
+                 {"x": x_grid}, return_type="dataframe")
+
+    # 予測：qごとに曲線
+    pred = {}
+    for q, res in models.items():
+        pred[q] = np.asarray(res.predict(Xg), dtype=float)
+
+    # 分位点の“交差”対策：各xで小さい順に並べ直す（簡易だが実務では効く）
+    mat = np.vstack([pred[q] for q in qs])          # shape=(nq, grid_n)
+    mat_sorted = np.sort(mat, axis=0)               # 各列（=各x）で昇順に
+    for i, q in enumerate(qs):
+        pred[q] = mat_sorted[i, :]
+
+    # お子様点
+    x_child = float(dfpt[xcol].iloc[0])
+    y_child = float(dfpt[ycol].iloc[0])
+
+    fig = go.Figure()
+
+    for q, c in zip(qs, centiles):
+        fig.add_trace(
+            go.Scatter(
+                x=x_grid,
+                y=pred[q],
+                mode="lines",
+                name=f"P{c}",
+                hovertemplate=f"月齢=%{{x:.2f}}<br>{ycol}=%{{y:.2f}}<extra>P{c}</extra>",
+            )
+        )
+
+    fig.add_trace(
+        go.Scatter(
+            x=[x_child],
+            y=[y_child],
+            mode="markers",
+            name="お子様",
+            marker=dict(size=12),
+            hovertemplate=f"お子様<br>月齢=%{{x:.2f}}<br>{ycol}=%{{y:.2f}}<extra></extra>",
+        )
+    )
+
+    fig.update_layout(
+        title=f"{ycol}：成長曲線（Quantile Regression）＋お子様",
+        xaxis_title="月齢",
+        yaxis_title=ycol,
+        height=520,
+        margin=dict(l=20, r=20, t=60, b=20),
+    )
+
+    return fig, {"n_train": meta["n"], "x_range": (meta["x_min"], meta["x_max"])}
+
 
 
 # -------------------------
@@ -907,6 +1014,18 @@ if run_all:
 #     st.write(f"治療率: {s['治療率(%)']:.1f}%  / 最適N={s['最適人数N']}  / 探索対象={s['探索対象人数']}")
 #     st.write(f"治療期間 平均={s['治療期間_mean']:.2f}  分散={s['治療期間_var']:.2f}")
 #     st.write(f"通院回数 平均={s['通院回数_mean']:.2f}  分散={s['通院回数_var']:.2f}")
+
+st.markdown("## 成長曲線（Rなし版）")
+
+target_params = ["頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI","前後径","左右径"]
+ycol = st.selectbox("指標", target_params, index=0)
+
+try:
+    fig, info = quantile_growth_curve_fig(df_first=df_first, dfpt=dfpt, ycol=ycol, spline_df=7)
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(f"学習n={info['n_train']} / 月齢範囲={info['x_range'][0]:.2f}〜{info['x_range'][1]:.2f}")
+except Exception as e:
+    st.error(str(e))
 
 if "similar_summary" in st.session_state:
     st.markdown("## 治療患者の集計")
