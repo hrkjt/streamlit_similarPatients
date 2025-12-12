@@ -277,7 +277,7 @@ with st.sidebar:
         st.success("キャッシュをクリアしました。再読み込みしてください。")
 
     if st.button("解析結果をクリア"):
-        for k in ["tx_rate_summary", "similar_summary", "tx_plot_fig", "tx_members", "co_plot_fig"]:
+        for k in ["tx_rate_summary", "similar_summary", "tx_plot_fig", "tx_members", "co_plot_fig", "growth_fig"]:
             st.session_state.pop(k, None)
         st.success("解析結果をクリアしました")
 
@@ -1136,11 +1136,13 @@ def growth_curve_panel_4x2(
                     x=x_grid,
                     y=mat[i, :],
                     mode="lines",
+                    name=f"P{cent}",  # ★これがないと trace 0 表示になる
                     line=dict(
                         color=CENTILE_COLORS.get(cent, "#999999"),
                         width=2 if cent == 50 else 1.2,  # 中央線を少し太く
                     ),
                     showlegend=show_leg,
+                    legendgroup=f"P{cent}",
                     hovertemplate=(
                         f"P{cent}<br>"
                         f"月齢=%{{x:.2f}}<br>"
@@ -1161,7 +1163,7 @@ def growth_curve_panel_4x2(
                 mode="markers",
                 marker=dict(
                   size=10,
-                  color="black",
+                  color="green",
                   symbol="circle"),
                 showlegend=False,
                 hovertemplate=f"お子様<br>月齢=%{{x:.2f}}<br>{ycol}=%{{y:.2f}}<extra></extra>",
@@ -1175,7 +1177,7 @@ def growth_curve_panel_4x2(
     fig.update_layout(
         height=1100,
         margin=dict(l=10, r=10, t=60, b=10),
-        title="成長曲線（学習：月齢1〜16か月）＋お子様",
+        title="初診患者の成長曲線",
     )
     return fig
 
@@ -1193,6 +1195,12 @@ if run_all:
         st.session_state["tx_rate_summary"] = tx_rate_st(dfpt.copy(), df_first=df_first, n=30)
         st.session_state["similar_summary"] = similar_pts_st(dfpt.copy(), min=5, remove_self=False)
 
+        # ★ 成長曲線もここで作成して保存
+        st.session_state["growth_fig"] = growth_curve_panel_4x2(
+            df_first=df_first,
+            dfpt=dfpt,
+            spline_df=7
+        )
 
         n = 100
         mo_weight = 10
@@ -1217,7 +1225,9 @@ if run_all:
 #     st.write(f"治療期間 平均={s['治療期間_mean']:.2f}  分散={s['治療期間_var']:.2f}")
 #     st.write(f"通院回数 平均={s['通院回数_mean']:.2f}  分散={s['通院回数_var']:.2f}")
 
-st.markdown("## 成長曲線")
+if "growth_fig" in st.session_state:
+    st.markdown("## 成長曲線")
+    st.plotly_chart(st.session_state["growth_fig"], use_container_width=True)
 
 # target_params = ["頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI","前後径","左右径"]
 # ycol = st.selectbox("指標", target_params, index=0)
@@ -1229,11 +1239,11 @@ st.markdown("## 成長曲線")
 # except Exception as e:
 #     st.error(str(e))
 
-try:
-    fig_growth = growth_curve_panel_4x2(df_first=df_first, dfpt=dfpt, spline_df=7)
-    st.plotly_chart(fig_growth, use_container_width=True)
-except Exception as e:
-    st.error(f"成長曲線の描画でエラー: {e}")
+# try:
+#     fig_growth = growth_curve_panel_4x2(df_first=df_first, dfpt=dfpt, spline_df=7)
+#     st.plotly_chart(fig_growth, use_container_width=True)
+# except Exception as e:
+#     st.error(f"成長曲線の描画でエラー: {e}")
 
 if "similar_summary" in st.session_state:
     st.markdown("## 治療患者の集計")
