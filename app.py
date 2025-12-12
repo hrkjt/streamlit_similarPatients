@@ -284,6 +284,28 @@ with st.sidebar:
 with st.spinner("APIからデータ取得＆前処理中...（初回は時間がかかります）"):
     data, df_all, df_h, df_first, df_tx_pre_post, df_co, dfco_pre, treated_set = load_and_prepare_data(api_url)
 
+
+neg_all = df_all[pd.to_numeric(df_all["月齢"], errors="coerce") < 0][["ダミーID","月齢"]].dropna()
+neg_first = df_first[pd.to_numeric(df_first["月齢"], errors="coerce") < 0][["ダミーID","月齢"]].dropna()
+
+if (len(neg_all) == 0) and (len(neg_first) == 0):
+  st.write("月齢<0 は見つかりませんでした。")
+else:
+  st.write("エラー検出：月齢がマイナスの外れ値")
+
+if len(neg_all):
+    st.write("### df_all（月齢<0）ダミーID一覧")
+    st.write(sorted(neg_all["ダミーID"].astype(str).unique().tolist()))
+    st.dataframe(neg_all.sort_values("月齢").head(50), use_container_width=True)
+
+if len(neg_first):
+    st.write("### df_first（月齢<0）ダミーID一覧")
+    st.write(sorted(neg_first["ダミーID"].astype(str).unique().tolist()))
+    st.dataframe(neg_first.sort_values("月齢").head(50), use_container_width=True)
+
+
+
+
 # 既存関数が参照している前提のグローバルを上書き（Colab移植の都合）
 globals()["df_first"] = df_first
 globals()["df_tx_pre_post"] = df_tx_pre_post
@@ -976,6 +998,160 @@ def quantile_growth_curve_fig(df_first: pd.DataFrame, dfpt: pd.DataFrame, ycol: 
 
     return fig, {"n_train": meta["n"], "x_range": (meta["x_min"], meta["x_max"])}
 
+@st.cache_resource(show_spinner=False)
+def _fit_quantile_models_1to16(df_first: pd.DataFrame, xcol: str, ycols: tuple,
+                              quantiles=(0.03,0.10,0.25,0.50,0.75,0.90,0.97),
+                              spline_df: int = 7):
+    """
+    月齢1〜16か月に限定して、各ycolごとにQuantReg(spline)モデルを学習
+    戻り: models[ycol][q] = fitted_result
+    """
+    d = df_first[[xcol] + list(ycols)].copy()
+    d[xcol] = pd.to_numeric(d[xcol], errors="coerce")
+
+    # ★ 学習データは月齢1〜16のみ
+    d = d[(d[xcol] >= 1) & (d[xcol] <= 16)].copy()
+
+    models = {}
+    meta = {"n_by_col": {}, "x_min": 1.0, "x_max": 16.0, "spline_df": spline_df}
+
+    # spline基底はx共通なので先に作る
+    x = d[xcol].to_numpy()
+    X = dmatrix(f"bs(x, df={spline_df}, degree=3, include_intercept=True)",
+                {"x": x}, return_type="dataframe")
+
+    for ycol in ycols:
+        yy = pd.to_numeric(d[ycol], errors="coerce")
+        mask = yy.notna() & np.isfinite(yy.to_numpy())
+        if mask.sum() < 80:
+            # 少なすぎる指標は学習しない
+            models[ycol] = None
+            meta["n_by_col"][ycol] = int(mask.sum())
+            continue
+
+        y = yy[mask].to_numpy()
+        Xy = X.loc[mask.values]  # maskに合わせる
+
+        q_models = {}
+        for q in quantiles:
+            res = sm.QuantReg(y, Xy).fit(q=q)
+            q_models[q] = res
+
+        models[ycol] = q_models
+        meta["n_by_col"][ycol] = int(mask.sum())
+
+    return models, meta
+
+
+def growth_curve_panel_4x2(
+    df_first: pd.DataFrame,
+    dfpt: pd.DataFrame,
+    xcol: str = "月齢",
+    centiles=(3,10,25,50,75,90,97),
+    spline_df: int = 7,
+):
+    """
+    4x2パネルで成長曲線（センタイル）＋お子様点を同時表示
+    """
+    # 4行×2列：あなたの既存para_tableに合わせる（8指標）
+    para_table = [
+        ["頭囲", "短頭率"],
+        ["前頭部対称率", "後頭部対称率"],
+        ["CA", "CVAI"],
+        ["前後径", "左右径"],
+    ]
+    ycols = tuple(sum(para_table, []))  # flatten
+
+    qs = tuple([c/100 for c in centiles])
+    models, meta = _fit_quantile_models_1to16(
+        df_first=df_first,
+        xcol=xcol,
+        ycols=ycols,
+        quantiles=qs,
+        spline_df=spline_df,
+    )
+
+    # 描画グリッド（★ 1〜16固定）
+    x_grid = np.linspace(1, 16, 160)
+    Xg = dmatrix(f"bs(x, df={meta['spline_df']}, degree=3, include_intercept=True)",
+                 {"x": x_grid}, return_type="dataframe")
+
+    # お子様
+    x_child = float(dfpt[xcol].iloc[0])
+
+    fig = make_subplots(
+        rows=4, cols=2,
+        subplot_titles=ycols,
+        horizontal_spacing=0.08,
+        vertical_spacing=0.10,
+    )
+
+    for idx, ycol in enumerate(ycols):
+        r = idx // 2 + 1
+        c = idx % 2 + 1
+
+        q_models = models.get(ycol)
+        n_train = meta["n_by_col"].get(ycol, 0)
+
+        # 学習不可なら注記だけ
+        if q_models is None:
+            fig.add_trace(
+                go.Scatter(
+                    x=[x_child], y=[float(dfpt[ycol].iloc[0])],
+                    mode="markers",
+                    name="お子様",
+                    showlegend=False,
+                    hovertemplate=f"お子様<br>月齢=%{{x:.2f}}<br>{ycol}=%{{y:.2f}}<extra></extra>",
+                ),
+                row=r, col=c
+            )
+            fig.update_yaxes(title_text=f"{ycol}<br>(n<{80})", row=r, col=c)
+            continue
+
+        # 分位点曲線を予測
+        mat = []
+        for q in qs:
+            yhat = np.asarray(q_models[q].predict(Xg), dtype=float)
+            mat.append(yhat)
+        mat = np.vstack(mat)            # (nq, grid)
+        mat = np.sort(mat, axis=0)      # 交差の簡易対策
+
+        # センタイル曲線
+        for i, cent in enumerate(centiles):
+            fig.add_trace(
+                go.Scatter(
+                    x=x_grid,
+                    y=mat[i, :],
+                    mode="lines",
+                    showlegend=False,
+                    hovertemplate=f"月齢=%{{x:.2f}}<br>{ycol}=%{{y:.2f}}<extra>P{cent}</extra>",
+                ),
+                row=r, col=c
+            )
+
+        # お子様点
+        y_child = float(dfpt[ycol].iloc[0])
+        fig.add_trace(
+            go.Scatter(
+                x=[x_child],
+                y=[y_child],
+                mode="markers",
+                marker=dict(size=10),
+                showlegend=False,
+                hovertemplate=f"お子様<br>月齢=%{{x:.2f}}<br>{ycol}=%{{y:.2f}}<extra></extra>",
+            ),
+            row=r, col=c
+        )
+
+        fig.update_yaxes(title_text=f"{ycol}<br>(n={n_train})", row=r, col=c)
+        fig.update_xaxes(range=[1, 16], row=r, col=c)
+
+    fig.update_layout(
+        height=1100,
+        margin=dict(l=10, r=10, t=60, b=10),
+        title="成長曲線（学習：月齢1〜16か月）＋お子様",
+    )
+    return fig
 
 
 # -------------------------
@@ -1015,17 +1191,23 @@ if run_all:
 #     st.write(f"治療期間 平均={s['治療期間_mean']:.2f}  分散={s['治療期間_var']:.2f}")
 #     st.write(f"通院回数 平均={s['通院回数_mean']:.2f}  分散={s['通院回数_var']:.2f}")
 
-st.markdown("## 成長曲線（Rなし版）")
+st.markdown("## 成長曲線")
 
-target_params = ["頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI","前後径","左右径"]
-ycol = st.selectbox("指標", target_params, index=0)
+# target_params = ["頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI","前後径","左右径"]
+# ycol = st.selectbox("指標", target_params, index=0)
+
+# try:
+#     fig, info = quantile_growth_curve_fig(df_first=df_first, dfpt=dfpt, ycol=ycol, spline_df=7)
+#     st.plotly_chart(fig, use_container_width=True)
+#     st.caption(f"学習n={info['n_train']} / 月齢範囲={info['x_range'][0]:.2f}〜{info['x_range'][1]:.2f}")
+# except Exception as e:
+#     st.error(str(e))
 
 try:
-    fig, info = quantile_growth_curve_fig(df_first=df_first, dfpt=dfpt, ycol=ycol, spline_df=7)
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption(f"学習n={info['n_train']} / 月齢範囲={info['x_range'][0]:.2f}〜{info['x_range'][1]:.2f}")
+    fig_growth = growth_curve_panel_4x2(df_first=df_first, dfpt=dfpt, spline_df=7)
+    st.plotly_chart(fig_growth, use_container_width=True)
 except Exception as e:
-    st.error(str(e))
+    st.error(f"成長曲線の描画でエラー: {e}")
 
 if "similar_summary" in st.session_state:
     st.markdown("## 治療患者の集計")
