@@ -585,7 +585,11 @@ def co_plot_fig(dfpt):
         margin=dict(l=10, r=10, t=50, b=10),
     )
 
-    return fig
+    max_mo = float(dfcon["月齢"].max()) if len(dfcon) else float("-inf")
+    child_mo = float(dfpt["月齢"].iloc[0])
+    should_show = (max_mo > child_mo)  # 1人でもお子様より月齢が大きければ True
+    
+    return fig, should_show, max_mo
 
 
 def _visits_summary(df_tx_pre_post: pd.DataFrame, members):
@@ -801,8 +805,11 @@ if run_all:
         st.session_state["tx_plot_fig"] = fig_tx
         st.session_state["tx_members"] = members
 
-        fig_co = co_plot_fig(dfpt.copy())
+        fig_co, show_co, co_max_mo = co_plot_fig(dfpt.copy())
         st.session_state["co_plot_fig"] = fig_co
+        st.session_state["show_co_plot"] = show_co
+        st.session_state["co_max_mo"] = co_max_mo
+
 
 # 表示（ボタン押さなくても session_state にあれば出す）
 # if "tx_rate_summary" in st.session_state:
@@ -833,11 +840,9 @@ if "tx_plot_fig" in st.session_state:
     st.markdown("## 治療患者の経過")
     st.plotly_chart(st.session_state["tx_plot_fig"], use_container_width=True)
 
-if "co_plot_fig" in st.session_state:
+if "co_plot_fig" in st.session_state and st.session_state.get("show_co_plot", False):
     st.markdown("## 経過観察患者の経過")
     st.plotly_chart(st.session_state["co_plot_fig"], use_container_width=True)
-
-
 
 # st.subheader("実行")
 
