@@ -1042,6 +1042,17 @@ def _fit_quantile_models_1to16(df_first: pd.DataFrame, xcol: str, ycols: tuple,
 
     return models, meta
 
+# パーセンタイル共通カラー（全パネル共通）
+CENTILE_COLORS = {
+    3:  "#313695",
+    10: "#4575b4",
+    25: "#74add1",
+    50: "#f46d43",  # 中央（目立たせる）
+    75: "#fdae61",
+    90: "#d73027",
+    97: "#a50026",
+}
+
 
 def growth_curve_panel_4x2(
     df_first: pd.DataFrame,
@@ -1116,6 +1127,8 @@ def growth_curve_panel_4x2(
         mat = np.vstack(mat)            # (nq, grid)
         mat = np.sort(mat, axis=0)      # 交差の簡易対策
 
+        show_leg = (r == 1 and c == 1)
+
         # センタイル曲線
         for i, cent in enumerate(centiles):
             fig.add_trace(
@@ -1123,11 +1136,21 @@ def growth_curve_panel_4x2(
                     x=x_grid,
                     y=mat[i, :],
                     mode="lines",
-                    showlegend=False,
-                    hovertemplate=f"月齢=%{{x:.2f}}<br>{ycol}=%{{y:.2f}}<extra>P{cent}</extra>",
+                    line=dict(
+                        color=CENTILE_COLORS.get(cent, "#999999"),
+                        width=2 if cent == 50 else 1.2,  # 中央線を少し太く
+                    ),
+                    showlegend=show_leg,
+                    hovertemplate=(
+                        f"P{cent}<br>"
+                        f"月齢=%{{x:.2f}}<br>"
+                        f"{ycol}=%{{y:.2f}}"
+                        "<extra></extra>"
+                    ),
                 ),
                 row=r, col=c
             )
+
 
         # お子様点
         y_child = float(dfpt[ycol].iloc[0])
@@ -1136,7 +1159,10 @@ def growth_curve_panel_4x2(
                 x=[x_child],
                 y=[y_child],
                 mode="markers",
-                marker=dict(size=10),
+                marker=dict(
+                  size=10,
+                  color="black",
+                  symbol="circle"),
                 showlegend=False,
                 hovertemplate=f"お子様<br>月齢=%{{x:.2f}}<br>{ycol}=%{{y:.2f}}<extra></extra>",
             ),
