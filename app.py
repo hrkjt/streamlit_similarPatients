@@ -445,10 +445,22 @@ def similar_pts_st(dfpt, min=5, remove_self=False):
     if dfpt_w["月齢"].iloc[0] < dfpt_w.T.max().iloc[0]:
         dfpt_w["月齢"] = dfpt_w.T.max().iloc[0]
 
+    # ---- z_列を df_first からダミーIDで付与（重複はIDで落とす）----
+    zcols = [f"z_{p}" for p in parameters]
+    zmap = df_first[["ダミーID"] + zcols].drop_duplicates("ダミーID").copy()
+    
     dftx_pre2 = dftx_pre2.copy()
-    dftx_pre2["w_delta"] = 0
+    dftx_pre2 = dftx_pre2.merge(zmap, on="ダミーID", how="left")
+    
+    # 念のため：z_ が欠損の行は落とす（安全）
+    dftx_pre2 = dftx_pre2.dropna(subset=zcols).reset_index(drop=True)
+    
+    # ---- w_delta（index整列を避けてnumpyで計算）----
+    dftx_pre2["w_delta"] = 0.0
     for p in parameters:
-        dftx_pre2["w_delta"] += dfpt_w[p].iloc[0] * abs(df_first["z_"+p] - dfpt_z[p].iloc[0])**2
+        z = dftx_pre2[f"z_{p}"].to_numpy()
+        dftx_pre2["w_delta"] += float(dfpt_w[p].iloc[0]) * (np.abs(z - float(dfpt_z[p].iloc[0])) ** 2)
+
 
     d = 1e10
     N = min
