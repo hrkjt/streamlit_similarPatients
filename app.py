@@ -153,6 +153,7 @@ def parameter_restriction(df, dfpt, tx=False):
 
 def calc_visits(df, members):
   df_temp = df[df['ダミーID'].isin(members)]
+  parameters = ['月齢','前後径','左右径','頭囲','短頭率','前頭部対称率','後頭部対称率','CA','CVAI']
   df_temp = df_temp.drop_duplicates(parameters, keep='last')
 
   # ダミーIDごとの件数 N を取得
@@ -326,8 +327,8 @@ dfpt = pd.DataFrame(data={
     "後屈度":[""],
 })
 
-st.write("入力データ（dfpt）")
-st.dataframe(dfpt, use_container_width=True)
+# st.write("入力データ（dfpt）")
+# st.dataframe(dfpt, use_container_width=True)
 
 def tx_rate_st(dfpt, df_first=df_first, n=30):
     st.write("### tx_rate 実行ログ")
