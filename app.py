@@ -128,6 +128,46 @@ def age_restriction(df, dfpt, tx=False):
 
   return(df_first)
 
+def parameter_restriction(df, dfpt, tx=False):
+  bi = dfpt['短頭率'].iloc[0]
+  asr = dfpt['前頭部対称率'].iloc[0]
+  psr = dfpt['後頭部対称率'].iloc[0]
+  ca = dfpt['CA'].iloc[0]
+  cvai =  dfpt['CVAI'].iloc[0]
+
+  # if tx:
+  #   df = df[(df['治療前短頭率'] > bi-3)&(df['治療前短頭率'] < bi+3)]
+  #   df = df[(df['治療前前頭部対称率'] > asr-5)&(df['治療前前頭部対称率'] < asr+5)]
+  #   df = df[(df['治療前後頭部対称率'] > psr-5)&(df['治療前後頭部対称率'] < psr+5)]
+  #   df = df[(df['治療前CA'] > ca-4)&(df['治療前CA'] < ca+4)]
+  #   df = df[(df['治療前CVAI'] > cvai-4)&(df['治療前CVAI'] < cvai+4)]
+
+  # else:
+  df = df[(df['短頭率'] > bi-3)&(df['短頭率'] < bi+3)]
+  df = df[(df['前頭部対称率'] > asr-5)&(df['前頭部対称率'] < asr+5)]
+  df = df[(df['後頭部対称率'] > psr-5)&(df['後頭部対称率'] < psr+5)]
+  df = df[(df['CA'] > ca-4)&(df['CA'] < ca+4)]
+  df = df[(df['CVAI'] > cvai-4)&(df['CVAI'] < cvai+4)]
+
+  return(df)
+
+def calc_visits(df, members):
+  df_temp = df[df['ダミーID'].isin(members)]
+  df_temp = df_temp.drop_duplicates(parameters, keep='last')
+
+  # ダミーIDごとの件数 N を取得
+  df_temp['通院回数'] = (
+      df_temp
+      .groupby('ダミーID')['治療期間']
+      .transform('count') - 1
+  )
+
+  df_temp = df_temp.sort_values(['ダミーID', '治療期間'])
+  df_temp = df_temp.drop_duplicates('ダミーID', keep='last')
+  # return df_temp['治療期間'].describe()
+  # return df_temp['通院回数'].describe()
+  return df_temp[['ダミーID', '治療期間', '通院回数']]
+
 # -------------------------
 # 1) データ取得＆前処理をキャッシュ
 # -------------------------
