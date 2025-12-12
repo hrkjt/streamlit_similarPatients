@@ -99,6 +99,35 @@ def add_post_levels(df):
 
   return(df)
 
+#患者の月齢に応じて探索対象を制限する関数　2023/6/3 作成
+def age_restriction(df, dfpt, tx=False):
+  df_first = df.copy()
+  mo = dfpt['月齢'].iloc[0]
+
+  if tx:
+    dftx = df_first
+    dftx = dftx[dftx['治療ステータス'] == '治療前']
+
+    if mo < 3:
+      members = dftx[dftx['月齢']<mo+2]['ダミーID']
+      #print('月齢を', mo+2, '未満に制限します')
+    elif mo > 10:
+      members=dftx[dftx['月齢']>mo-2]['ダミーID']
+    else:
+      members=dftx[(dftx['月齢']>mo-1)&(dftx['月齢']<mo+1)]['ダミーID']
+
+    df_first = df_first[df_first['ダミーID'].isin(members)]
+
+  else:
+    if mo < 3:
+      df_first=df_first[df_first['月齢']<mo+2]
+    elif mo > 10:
+      df_first=df_first[df_first['月齢']>mo-2]
+    else:
+      df_first=df_first[(df_first['月齢']>mo-1)&(df_first['月齢']<mo+1)]
+
+  return(df_first)
+
 # -------------------------
 # 1) データ取得＆前処理をキャッシュ
 # -------------------------
