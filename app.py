@@ -1281,10 +1281,10 @@ if "co_plot_fig" in st.session_state:
     st.markdown("## 経過観察患者の経過")
     st.plotly_chart(st.session_state["co_plot_fig"], use_container_width=True)
 else:
-    # 必要なら理由を表示（デバッグ用）
-    # r = st.session_state.get("co_plot_skip_reason")
-    # if r:
-    #     st.caption(f"co_plot非表示: お子様月齢={r['m_child']:.2f}, 類似初回月齢min={r['first_mo_min']}, max={r['first_mo_max']}")
+    必要なら理由を表示（デバッグ用）
+    r = st.session_state.get("co_plot_skip_reason")
+    if r:
+        st.caption(f"co_plot非表示: お子様月齢={r['m_child']:.2f}, 類似初回月齢min={r['first_mo_min']}, max={r['first_mo_max']}")
     pass
 
 # st.subheader("実行")
