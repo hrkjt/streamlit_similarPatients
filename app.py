@@ -552,68 +552,69 @@ def co_plot_fig(dfpt):
     import plotly.express as px
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
+    import numpy as np
+    import pandas as pd
 
     HOVER_COLS = ["月齢","頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI","前後径","左右径"]
 
     dfpt = dfpt.copy()
     dfpt["APR"] = dfpt["前頭部対称率"] / dfpt["後頭部対称率"]
 
-    # parameters = ["月齢","前後径","左右径","頭囲","短頭率",
-    #               "前頭部対称率","後頭部対称率","CA","CVAI","APR"]
+    parameters = ["月齢","前後径","左右径","頭囲","短頭率",
+                  "前頭部対称率","後頭部対称率","CA","CVAI","APR"]
 
-    # dfco_pre_global = dfco_pre.copy()
+    # ベース（経過観察 初回群）
+    dfco_pre_global = dfco_pre.copy()
+    dfco_pre_global["APR"] = dfco_pre_global["前頭部対称率"] / dfco_pre_global["後頭部対称率"]
 
-    # dfpt_z = (dfpt[parameters] - dfco_pre_global[parameters].mean()) / dfco_pre_global[parameters].std()
-    # dfpt_w = 10 ** abs(dfpt_z)
+    # ★月齢で先にハード制限（ここが「月齢寄せ」には一番効く）
+    dfco_pre2 = age_restriction(dfco_pre_global, dfpt)  # tx=False
 
-    # if dfpt_w["月齢"].iloc[0] < dfpt_w.T.max().iloc[0]:
-    #     dfpt_w["月齢"] = dfpt_w.T.max().iloc[0]
+    # ---- z（同じ基準で dfpt と dfco_pre を標準化）----
+    mu = dfco_pre_global[parameters].mean()
+    sd = dfco_pre_global[parameters].std()
 
-    # dfpt_w["月齢"] *= 100  #月齢重みを100倍
+    # sd=0 対策（念のため）
+    sd = sd.replace(0, np.nan)
 
-    # dfco_pre_global["w_delta"] = 0
-    # for p in parameters:
-    #     dfco_pre_global["w_delta"] += (
-    #         dfpt_w[p].iloc[0] * abs(df_first["z_" + p] - dfpt_z[p].iloc[0]) ** 2
-    #     )
+    dfpt_z = (dfpt[parameters] - mu) / sd
+    dfpt_w = 10 ** abs(dfpt_z)
 
-    # st.write("w_delta NaN率", dfco_pre_global["w_delta"].isna().mean())
+    # 月齢重み最大化＋倍率
+    if dfpt_w["月齢"].iloc[0] < dfpt_w.T.max().iloc[0]:
+        dfpt_w["月齢"] = dfpt_w.T.max().iloc[0]
+    dfpt_w["月齢"] *= 10  # ←ここを 10→30→100 とかで効きます
 
-    # rank = list(dfco_pre_global.sort_values("w_delta")["ダミーID"])[:10]
-    # dfcon = df_co[df_co["ダミーID"].isin(rank)].copy()
+    # dfco_pre2 側も同じ基準でz化
+    zco = (dfco_pre2[parameters] - mu) / sd
+    zco = zco.replace([np.inf, -np.inf], np.nan).dropna().reset_index(drop=True)
+    dfco_pre2 = dfco_pre2.loc[zco.index].reset_index(drop=True)
 
-    # ====== 追加：年齢で候補を絞る（強制的に月齢を寄せたいなら最重要） ======
-    dfco_pre2 = age_restriction(dfco_pre.copy(), dfpt)  # tx=False でOK（dfptは1行）
-    
-    # ====== z_列を df_first から付与（IDベースでmerge） ======
-    parameters = ["月齢","前後径","左右径","頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI","APR"]
-    zcols = [f"z_{p}" for p in parameters]
-    
-    zmap = df_first[["ダミーID"] + zcols].drop_duplicates("ダミーID").copy()
-    dfco_pre2 = dfco_pre2.merge(zmap, on="ダミーID", how="left").dropna(subset=zcols).reset_index(drop=True)
-    
-    # ====== w_delta（numpyで計算してindex整列を殺す） ======
-    dfco_pre2["w_delta"] = 0.0
+    # ---- w_delta（numpyで計算してindex整列事故を回避）----
+    w_delta = np.zeros(len(dfco_pre2), dtype=float)
     for p in parameters:
-        z = dfco_pre2[f"z_{p}"].to_numpy()
-        dfco_pre2["w_delta"] += float(dfpt_w[p].iloc[0]) * (np.abs(z - float(dfpt_z[p].iloc[0])) ** 2)
-    
+        w = float(dfpt_w[p].iloc[0])
+        diff = (zco[p].to_numpy() - float(dfpt_z[p].iloc[0]))
+        w_delta += w * (np.abs(diff) ** 2)
+
+    dfco_pre2["w_delta"] = w_delta
+
     rank = dfco_pre2.sort_values("w_delta")["ダミーID"].head(10).tolist()
     dfcon = df_co[df_co["ダミーID"].isin(rank)].copy()
 
-    # ★ 追加：表示するか判定
+    # ★表示判定
     show = should_show_co_plot(dfpt, dfcon)
 
-    # 参考情報（デバッグ用に返す）
     m_child = float(dfpt["月齢"].iloc[0])
     first_mo = dfcon.groupby("ダミーID")["月齢"].min() if not dfcon.empty else pd.Series(dtype=float)
-    reason = {"m_child": m_child, "first_mo_min": float(first_mo.min()) if len(first_mo) else None,
+    reason = {"m_child": m_child,
+              "first_mo_min": float(first_mo.min()) if len(first_mo) else None,
               "first_mo_max": float(first_mo.max()) if len(first_mo) else None}
 
     if not show:
-        return None, show, reason  # ★ 表示しない時は fig を作らない
+        return None, show, reason
 
-    # ===== ここから先は今の描画ロジックそのまま =====
+    # ===== ここから描画は元のまま =====
     para_table = [
         ["頭囲", "短頭率"],
         ["前頭部対称率", "後頭部対称率"],
@@ -622,7 +623,6 @@ def co_plot_fig(dfpt):
     ]
 
     fig = make_subplots(rows=4, cols=2, subplot_titles=sum(para_table, []))
-
     hover_cols = [c for c in HOVER_COLS if c in dfpt.columns]
 
     def hovertemplate(prefix: str):
@@ -635,14 +635,12 @@ def co_plot_fig(dfpt):
         lines.append("<extra></extra>")
         return "".join(lines)
 
-    # お子様
     custom_pt = dfpt[hover_cols].to_numpy()
     for i in range(4):
         for j in range(2):
             fig.add_trace(
                 go.Scatter(
-                    x=dfpt["月齢"],
-                    y=dfpt[para_table[i][j]],
+                    x=dfpt["月齢"], y=dfpt[para_table[i][j]],
                     mode="lines+markers",
                     marker=dict(color="green", size=9),
                     line=dict(width=3),
@@ -653,23 +651,18 @@ def co_plot_fig(dfpt):
                 row=i+1, col=j+1
             )
 
-    # 類似経過観察
     colors = px.colors.qualitative.Alphabet
     c = 0
     for pid in dfcon["ダミーID"].unique():
         tmp = dfcon[dfcon["ダミーID"] == pid].copy()
         if tmp.empty:
             continue
-
-        hover_cols_sim = [c for c in hover_cols if c in tmp.columns]
-        custom_sim = tmp[hover_cols_sim].to_numpy()
-
+        custom_sim = tmp[hover_cols].to_numpy()
         for i in range(4):
             for j in range(2):
                 fig.add_trace(
                     go.Scatter(
-                        x=tmp["月齢"],
-                        y=tmp[para_table[i][j]],
+                        x=tmp["月齢"], y=tmp[para_table[i][j]],
                         mode="lines+markers",
                         marker=dict(size=5, color=colors[c % len(colors)]),
                         line=dict(width=1),
@@ -683,6 +676,7 @@ def co_plot_fig(dfpt):
 
     fig.update_layout(height=1300, showlegend=False, margin=dict(l=10, r=10, t=50, b=10))
     return fig, show, reason
+
 
 def _visits_summary(df_tx_pre_post: pd.DataFrame, members):
     """members(ダミーID一覧) から 治療期間/通院回数 を患者単位で集計して mean/std を返す"""
