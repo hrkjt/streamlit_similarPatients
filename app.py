@@ -558,26 +558,47 @@ def co_plot_fig(dfpt):
     dfpt = dfpt.copy()
     dfpt["APR"] = dfpt["前頭部対称率"] / dfpt["後頭部対称率"]
 
-    parameters = ["月齢","前後径","左右径","頭囲","短頭率",
-                  "前頭部対称率","後頭部対称率","CA","CVAI","APR"]
+    # parameters = ["月齢","前後径","左右径","頭囲","短頭率",
+    #               "前頭部対称率","後頭部対称率","CA","CVAI","APR"]
 
-    dfco_pre_global = dfco_pre.copy()
+    # dfco_pre_global = dfco_pre.copy()
 
-    dfpt_z = (dfpt[parameters] - dfco_pre_global[parameters].mean()) / dfco_pre_global[parameters].std()
-    dfpt_w = 10 ** abs(dfpt_z)
+    # dfpt_z = (dfpt[parameters] - dfco_pre_global[parameters].mean()) / dfco_pre_global[parameters].std()
+    # dfpt_w = 10 ** abs(dfpt_z)
 
-    if dfpt_w["月齢"].iloc[0] < dfpt_w.T.max().iloc[0]:
-        dfpt_w["月齢"] = dfpt_w.T.max().iloc[0]
+    # if dfpt_w["月齢"].iloc[0] < dfpt_w.T.max().iloc[0]:
+    #     dfpt_w["月齢"] = dfpt_w.T.max().iloc[0]
 
-    dfpt_w["月齢"] *= 100  #月齢重みを100倍
+    # dfpt_w["月齢"] *= 100  #月齢重みを100倍
 
-    dfco_pre_global["w_delta"] = 0
+    # dfco_pre_global["w_delta"] = 0
+    # for p in parameters:
+    #     dfco_pre_global["w_delta"] += (
+    #         dfpt_w[p].iloc[0] * abs(df_first["z_" + p] - dfpt_z[p].iloc[0]) ** 2
+    #     )
+
+    # st.write("w_delta NaN率", dfco_pre_global["w_delta"].isna().mean())
+
+    # rank = list(dfco_pre_global.sort_values("w_delta")["ダミーID"])[:10]
+    # dfcon = df_co[df_co["ダミーID"].isin(rank)].copy()
+
+    # ====== 追加：年齢で候補を絞る（強制的に月齢を寄せたいなら最重要） ======
+    dfco_pre2 = age_restriction(dfco_pre.copy(), dfpt)  # tx=False でOK（dfptは1行）
+    
+    # ====== z_列を df_first から付与（IDベースでmerge） ======
+    parameters = ["月齢","前後径","左右径","頭囲","短頭率","前頭部対称率","後頭部対称率","CA","CVAI","APR"]
+    zcols = [f"z_{p}" for p in parameters]
+    
+    zmap = df_first[["ダミーID"] + zcols].drop_duplicates("ダミーID").copy()
+    dfco_pre2 = dfco_pre2.merge(zmap, on="ダミーID", how="left").dropna(subset=zcols).reset_index(drop=True)
+    
+    # ====== w_delta（numpyで計算してindex整列を殺す） ======
+    dfco_pre2["w_delta"] = 0.0
     for p in parameters:
-        dfco_pre_global["w_delta"] += (
-            dfpt_w[p].iloc[0] * abs(df_first["z_" + p] - dfpt_z[p].iloc[0]) ** 2
-        )
-
-    rank = list(dfco_pre_global.sort_values("w_delta")["ダミーID"])[:10]
+        z = dfco_pre2[f"z_{p}"].to_numpy()
+        dfco_pre2["w_delta"] += float(dfpt_w[p].iloc[0]) * (np.abs(z - float(dfpt_z[p].iloc[0])) ** 2)
+    
+    rank = dfco_pre2.sort_values("w_delta")["ダミーID"].head(10).tolist()
     dfcon = df_co[df_co["ダミーID"].isin(rank)].copy()
 
     # ★ 追加：表示するか判定
