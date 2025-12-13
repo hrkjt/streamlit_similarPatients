@@ -587,8 +587,14 @@ def co_plot_fig(dfpt):
 
     # dfco_pre2 側も同じ基準でz化
     zco = (dfco_pre2[parameters] - mu) / sd
-    zco = zco.replace([np.inf, -np.inf], np.nan).dropna().reset_index(drop=True)
-    dfco_pre2 = dfco_pre2.loc[zco.index].reset_index(drop=True)
+    zco = zco.replace([np.inf, -np.inf], np.nan)
+    
+    # ★同じ行を同じmaskで残す（indexを崩さない）
+    mask = zco.notna().all(axis=1)
+    
+    dfco_pre2 = dfco_pre2.loc[mask].reset_index(drop=True)
+    zco = zco.loc[mask].reset_index(drop=True)
+
 
     # ---- w_delta（numpyで計算してindex整列事故を回避）----
     w_delta = np.zeros(len(dfco_pre2), dtype=float)
