@@ -385,6 +385,8 @@ def tx_rate_st(dfpt, df_first=df_first, treated_set=None, n=30):
     if dfpt_w["月齢"].iloc[0] < dfpt_w.T.max().iloc[0]:
         dfpt_w.loc[dfpt_w.index[0], "月齢"] = dfpt_w.T.max().iloc[0]
 
+    dfpt_w.loc[dfpt_w.index[0], "月齢"] *= 10  #月齢重みを10倍
+
     df_first2 = age_restriction(df_first, dfpt)
     df_first_temp = parameter_restriction(df_first2, dfpt)  # ※この関数は別途定義が必要
     if len(df_first_temp) >= 10:
@@ -538,8 +540,8 @@ def should_show_co_plot(dfpt: pd.DataFrame, dfcon: pd.DataFrame) -> bool:
     m_child = float(dfpt["月齢"].iloc[0])
 
     # ★ 追加：4か月未満なら常に表示
-    if m_child < 4.0:
-        return True
+    # if m_child < 4.0:
+    #     return True
 
     first_mo = (
         dfcon.groupby("ダミーID")["月齢"]
