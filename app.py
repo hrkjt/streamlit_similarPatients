@@ -1288,7 +1288,7 @@ else:
     # 必要なら理由を表示（デバッグ用）
     r = st.session_state.get("co_plot_skip_reason")
     if r:
-        st.caption(f"co_plot非表示: お子様月齢={r['m_child']:.2f}, 類似初回月齢min={r['first_mo_min']}, max={r['first_mo_max']}")
+        st.caption(f"経過観察のグラフは非表示: お子様月齢={r['m_child']:.2f}, 類似初回月齢min={r['first_mo_min']}, max={r['first_mo_max']}")
     pass
 
 # st.subheader("実行")
