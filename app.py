@@ -537,6 +537,10 @@ def should_show_co_plot(dfpt: pd.DataFrame, dfcon: pd.DataFrame) -> bool:
 
     m_child = float(dfpt["月齢"].iloc[0])
 
+    # ★ 追加：4か月未満なら常に表示
+    if m_child < 4.0:
+        return True
+
     first_mo = (
         dfcon.groupby("ダミーID")["月齢"]
             .min()
