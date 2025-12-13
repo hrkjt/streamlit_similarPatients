@@ -569,7 +569,7 @@ def co_plot_fig(dfpt):
     if dfpt_w["月齢"].iloc[0] < dfpt_w.T.max().iloc[0]:
         dfpt_w["月齢"] = dfpt_w.T.max().iloc[0]
 
-    dfpt_w["月齢"] *= 10  #月齢重みを10倍
+    dfpt_w["月齢"] *= 100  #月齢重みを100倍
 
     dfco_pre_global["w_delta"] = 0
     for p in parameters:
